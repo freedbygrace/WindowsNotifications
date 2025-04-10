@@ -209,21 +209,6 @@ namespace WindowsNotifications.Models
         public Action<NotificationResult> OnError { get; set; }
 
         /// <summary>
-        /// Optional deadline time for the notification
-        /// </summary>
-        public DateTime? DeadlineTime { get; set; }
-
-        /// <summary>
-        /// The action to take when the deadline is reached
-        /// </summary>
-        public DeadlineAction DeadlineAction { get; set; }
-
-        /// <summary>
-        /// Whether to show a countdown timer on the notification
-        /// </summary>
-        public bool ShowCountdown { get; set; } = false;
-
-        /// <summary>
         /// Optional serialized data for reminders
         /// </summary>
         public string ReminderData { get; set; }

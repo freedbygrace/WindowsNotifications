@@ -1,4 +1,4 @@
-# Build script for WindowsNotifications
+# Build script for SimpleWindowsNotifications
 
 # Set the configuration
 $Configuration = "Release"
@@ -12,24 +12,24 @@ if (-not $dotnetPath) {
 
 # Clean the solution
 Write-Host "Cleaning solution..." -ForegroundColor Cyan
-dotnet clean WindowsNotifications.sln --configuration $Configuration
+dotnet clean SimpleWindowsNotifications.sln --configuration $Configuration
 
 # Restore NuGet packages
 Write-Host "Restoring NuGet packages..." -ForegroundColor Cyan
-dotnet restore WindowsNotifications.sln
+dotnet restore SimpleWindowsNotifications.sln
 
 # Build the solution
 Write-Host "Building solution..." -ForegroundColor Cyan
-dotnet build WindowsNotifications.sln --configuration $Configuration --no-restore
+dotnet build SimpleWindowsNotifications.sln --configuration $Configuration --no-restore
 
 # Check if the build was successful
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build completed successfully!" -ForegroundColor Green
-
+    
     # Show the output directory
     $outputDir = Join-Path -Path $PSScriptRoot -ChildPath "WindowsNotifications\bin\$Configuration"
     Write-Host "Output directory: $outputDir" -ForegroundColor Yellow
-
+    
     # List the files in the output directory
     Get-ChildItem -Path $outputDir | Format-Table Name, Length
 } else {

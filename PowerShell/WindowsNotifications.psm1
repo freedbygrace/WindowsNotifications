@@ -1,55 +1,12 @@
 #
 # WindowsNotifications.psm1
-# PowerShell module for the Windows Notifications library
+# PowerShell module for Windows notifications
 #
+
+# The assembly is loaded automatically by the module manifest (PSD1)
 
 # Module variables
-$script:NotificationAssembly = $null
 $script:NotificationManager = $null
-$script:DefaultDatabasePath = $null
-
-#
-# Private functions
-#
-
-function Initialize-NotificationAssembly {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$false)]
-        [string]$AssemblyPath
-    )
-
-    try {
-        # If assembly path is provided and exists, load from file
-        if ($AssemblyPath -and (Test-Path $AssemblyPath)) {
-            $bytes = [System.IO.File]::ReadAllBytes($AssemblyPath)
-            $script:NotificationAssembly = [System.Reflection.Assembly]::Load($bytes)
-        }
-        # Otherwise, try to load from the module directory
-        else {
-            $moduleRoot = Split-Path -Parent $PSCommandPath
-            $defaultPath = Join-Path -Path $moduleRoot -ChildPath "WindowsNotifications.dll"
-
-            if (Test-Path $defaultPath) {
-                $bytes = [System.IO.File]::ReadAllBytes($defaultPath)
-                $script:NotificationAssembly = [System.Reflection.Assembly]::Load($bytes)
-            }
-            else {
-                throw "WindowsNotifications.dll not found. Please specify the path using the -AssemblyPath parameter."
-            }
-        }
-
-        # Create the notification manager
-        $script:NotificationManager = New-Object WindowsNotifications.NotificationManager
-        $script:DefaultDatabasePath = $script:NotificationManager.GetDatabaseFilePath()
-
-        return $true
-    }
-    catch {
-        Write-Error "Failed to initialize WindowsNotifications assembly: $_"
-        return $false
-    }
-}
 
 #
 # Public functions
@@ -59,41 +16,38 @@ function Initialize-WindowsNotifications {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$false)]
-        [string]$AssemblyPath,
-
-        [Parameter(Mandatory=$false)]
         [string]$DatabasePath
     )
 
-    # Initialize the assembly
-    if (-not (Initialize-NotificationAssembly -AssemblyPath $AssemblyPath)) {
+    try {
+        # Create the notification manager
+        if ($DatabasePath) {
+            $script:NotificationManager = New-Object WindowsNotifications.NotificationManager($DatabasePath)
+        }
+        else {
+            $script:NotificationManager = New-Object WindowsNotifications.NotificationManager
+        }
+
+        Write-Output "Windows Notifications initialized successfully."
+        Write-Output "Database path: $($script:NotificationManager.GetDatabaseFilePath())"
+
+        # Check if running as SYSTEM
+        $isSystem = $script:NotificationManager.IsRunningAsSystem()
+        Write-Output "Running as SYSTEM: $isSystem"
+
+        # Check for interactive user sessions
+        $sessions = $script:NotificationManager.GetInteractiveUserSessions()
+        Write-Output "Interactive user sessions: $($sessions.Count)"
+        foreach ($session in $sessions) {
+            Write-Output "  - $session"
+        }
+
+        return $true
+    }
+    catch {
+        Write-Error "Failed to initialize NotificationManager: $_"
         return $false
     }
-
-    # If a custom database path is specified, create a new notification manager with that path
-    if ($DatabasePath) {
-        try {
-            $script:NotificationManager = New-Object WindowsNotifications.NotificationManager($DatabasePath)
-            $script:DefaultDatabasePath = $script:NotificationManager.GetDatabaseFilePath()
-        }
-        catch {
-            Write-Error "Failed to initialize NotificationManager with custom database path: $_"
-            return $false
-        }
-    }
-
-    Write-Host "WindowsNotifications initialized successfully."
-    Write-Host "Database path: $script:DefaultDatabasePath"
-
-    # Check if running as SYSTEM
-    $isSystem = $script:NotificationManager.IsRunningAsSystem()
-    Write-Host "Running as SYSTEM: $isSystem"
-
-    # Get interactive user sessions
-    $sessions = $script:NotificationManager.GetInteractiveUserSessions()
-    Write-Host "Interactive user sessions found: $($sessions.Count)"
-
-    return $true
 }
 
 function Show-Notification {
@@ -112,21 +66,10 @@ function Show-Notification {
         [Parameter(Mandatory=$true, ParameterSetName="WithButtons")]
         [string[]]$Buttons,
 
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$RebootButtonText = "Reboot Now",
-
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$DeferButtonText = "Defer",
-
         [Parameter(Mandatory=$false, ParameterSetName="Simple")]
         [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
         [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
         [switch]$Async,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [switch]$PersistState,
 
         [Parameter(Mandatory=$false, ParameterSetName="Simple")]
         [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
@@ -146,57 +89,7 @@ function Show-Notification {
         [Parameter(Mandatory=$false, ParameterSetName="Simple")]
         [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
         [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$InlineImagePath,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$AppIconPath,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$BackgroundImagePath,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$BrandingText,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$BrandingColor,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$AccentColor,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [switch]$UseDarkTheme,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$AudioSource,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [switch]$SilentMode,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [switch]$ShowReminder,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [int]$ReminderTimeInMinutes = 60,
+        [string]$Attribution,
 
         [Parameter(Mandatory=$false, ParameterSetName="Simple")]
         [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
@@ -208,38 +101,14 @@ function Show-Notification {
         [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
         [switch]$ShowCountdown,
 
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
         [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$DeadlineActionCommand,
+        [string]$RebootButtonText = "Reboot Now",
 
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
         [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$DeadlineActionArguments,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$DeadlineActionUrl,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$DeadlineActionScript,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [switch]$EnableLogging,
-
-        [Parameter(Mandatory=$false, ParameterSetName="Simple")]
-        [Parameter(Mandatory=$false, ParameterSetName="WithButtons")]
-        [Parameter(Mandatory=$false, ParameterSetName="Reboot")]
-        [string]$LogFilePath
+        [string]$DeferButtonText = "Defer"
     )
 
-    # Ensure the notification assembly is initialized
+    # Ensure the notification manager is initialized
     if (-not $script:NotificationManager) {
         if (-not (Initialize-WindowsNotifications)) {
             return $null
@@ -247,129 +116,50 @@ function Show-Notification {
     }
 
     try {
+        # Create notification options
+        $options = New-Object WindowsNotifications.Models.NotificationOptions
+        $options.Title = $Title
+        $options.Message = $Message
+        $options.Async = $Async.IsPresent
+        $options.TimeoutInSeconds = $TimeoutInSeconds
+
+        # Add optional parameters
+        if ($LogoImagePath) { $options.LogoImagePath = $LogoImagePath }
+        if ($HeroImagePath) { $options.HeroImagePath = $HeroImagePath }
+        if ($Attribution) { $options.Attribution = $Attribution }
+        if ($DeadlineTime) { $options.DeadlineTime = $DeadlineTime }
+        if ($ShowCountdown) { $options.ShowCountdown = $true }
+
         # Handle different parameter sets
         switch ($PSCmdlet.ParameterSetName) {
             "Simple" {
-                # Create custom notification options for simple notification
-                $options = New-Object WindowsNotifications.Models.NotificationOptions
-                $options.Title = $Title
-                $options.Message = $Message
-                $options.Async = $Async
-                $options.PersistState = $PersistState
-                $options.TimeoutInSeconds = $TimeoutInSeconds
-                $options.ShowReminder = $ShowReminder
-                $options.ReminderTimeInMinutes = $ReminderTimeInMinutes
-
-                # Set image paths
-                if ($LogoImagePath) { $options.LogoImagePath = $LogoImagePath }
-                if ($HeroImagePath) { $options.HeroImagePath = $HeroImagePath }
-                if ($InlineImagePath) { $options.InlineImagePath = $InlineImagePath }
-                if ($AppIconPath) { $options.AppIconPath = $AppIconPath }
-                if ($BackgroundImagePath) { $options.BackgroundImagePath = $BackgroundImagePath }
-
-                # Set branding options
-                if ($BrandingText) { $options.BrandingText = $BrandingText }
-                if ($BrandingColor) { $options.BrandingColor = $BrandingColor }
-                if ($AccentColor) { $options.AccentColor = $AccentColor }
-                if ($UseDarkTheme) { $options.UseDarkTheme = $UseDarkTheme }
-
-                # Set audio options
-                if ($AudioSource) { $options.AudioSource = $AudioSource }
-                if ($SilentMode) { $options.SilentMode = $SilentMode }
-
-                # Set deadline and countdown options
-                if ($DeadlineTime -ne $null) { $options.DeadlineTime = $DeadlineTime }
-                if ($ShowCountdown) { $options.ShowCountdown = $ShowCountdown }
-
-                # Set deadline action
-                if ($DeadlineActionCommand) {
-                    $options.DeadlineAction = New-Object WindowsNotifications.Models.DeadlineAction($DeadlineActionCommand, $DeadlineActionArguments)
-                }
-                elseif ($DeadlineActionUrl) {
-                    $options.DeadlineAction = [WindowsNotifications.Models.DeadlineAction]::OpenUrl($DeadlineActionUrl)
-                }
-                elseif ($DeadlineActionScript) {
-                    $options.DeadlineAction = [WindowsNotifications.Models.DeadlineAction]::ExecuteScript($DeadlineActionScript)
-                }
-
-                # Set logging options
-                if ($EnableLogging) { $options.EnableLogging = $true }
-                if ($LogFilePath) {
-                    $options.LogAction = {
-                        param($logEntry)
-                        Add-Content -Path $LogFilePath -Value $logEntry
-                    }
-                }
-
-                $result = $script:NotificationManager.ShowNotification($options)
+                # Show a simple notification
+                return $script:NotificationManager.ShowNotification($options)
             }
             "WithButtons" {
-                # Create custom notification options for notification with buttons
-                $options = New-Object WindowsNotifications.Models.NotificationOptions
-                $options.Title = $Title
-                $options.Message = $Message
-                $options.Async = $Async
-                $options.PersistState = $PersistState
-                $options.TimeoutInSeconds = $TimeoutInSeconds
-                $options.ShowReminder = $ShowReminder
-                $options.ReminderTimeInMinutes = $ReminderTimeInMinutes
-
-                # Set image paths
-                if ($LogoImagePath) { $options.LogoImagePath = $LogoImagePath }
-                if ($HeroImagePath) { $options.HeroImagePath = $HeroImagePath }
-                if ($InlineImagePath) { $options.InlineImagePath = $InlineImagePath }
-                if ($AppIconPath) { $options.AppIconPath = $AppIconPath }
-                if ($BackgroundImagePath) { $options.BackgroundImagePath = $BackgroundImagePath }
-
-                # Set branding options
-                if ($BrandingText) { $options.BrandingText = $BrandingText }
-                if ($BrandingColor) { $options.BrandingColor = $BrandingColor }
-                if ($AccentColor) { $options.AccentColor = $AccentColor }
-                if ($UseDarkTheme) { $options.UseDarkTheme = $UseDarkTheme }
-
-                # Set audio options
-                if ($AudioSource) { $options.AudioSource = $AudioSource }
-                if ($SilentMode) { $options.SilentMode = $SilentMode }
-
-                # Set deadline and countdown options
-                if ($DeadlineTime -ne $null) { $options.DeadlineTime = $DeadlineTime }
-                if ($ShowCountdown) { $options.ShowCountdown = $ShowCountdown }
-
-                # Set deadline action
-                if ($DeadlineActionCommand) {
-                    $options.DeadlineAction = New-Object WindowsNotifications.Models.DeadlineAction($DeadlineActionCommand, $DeadlineActionArguments)
-                }
-                elseif ($DeadlineActionUrl) {
-                    $options.DeadlineAction = [WindowsNotifications.Models.DeadlineAction]::OpenUrl($DeadlineActionUrl)
-                }
-                elseif ($DeadlineActionScript) {
-                    $options.DeadlineAction = [WindowsNotifications.Models.DeadlineAction]::ExecuteScript($DeadlineActionScript)
-                }
-
-                # Set logging options
-                if ($EnableLogging) { $options.EnableLogging = $true }
-                if ($LogFilePath) {
-                    $options.LogAction = {
-                        param($logEntry)
-                        Add-Content -Path $LogFilePath -Value $logEntry
-                    }
-                }
-
                 # Add buttons
                 foreach ($buttonText in $Buttons) {
-                    $button = New-Object WindowsNotifications.Models.NotificationButton($buttonText)
+                    $button = New-Object WindowsNotifications.Models.NotificationButton($buttonText, "button$($options.Buttons.Count)")
                     $options.Buttons.Add($button)
                 }
 
-                $result = $script:NotificationManager.ShowNotification($options)
+                # Show the notification with buttons
+                return $script:NotificationManager.ShowNotification($options)
             }
             "Reboot" {
-                # Use the built-in reboot notification method
-                $result = $script:NotificationManager.ShowRebootNotification($Title, $Message, $RebootButtonText, $DeferButtonText)
+                # Create deferral options
+                $deferralOptions = New-Object WindowsNotifications.Models.DeferralOptions
+                $deferralOptions.DeferButtonText = $DeferButtonText
+                $options.DeferralOptions = $deferralOptions
+
+                # Add reboot button
+                $rebootButton = New-Object WindowsNotifications.Models.NotificationButton($RebootButtonText, "reboot")
+                $options.Buttons.Add($rebootButton)
+
+                # Show the reboot notification
+                return $script:NotificationManager.ShowNotification($options)
             }
         }
-
-        return $result
     }
     catch {
         Write-Error "Failed to show notification: $_"
@@ -384,7 +174,7 @@ function Get-NotificationResult {
         [string]$NotificationId
     )
 
-    # Ensure the notification assembly is initialized
+    # Ensure the notification manager is initialized
     if (-not $script:NotificationManager) {
         if (-not (Initialize-WindowsNotifications)) {
             return $null
@@ -410,7 +200,7 @@ function Wait-Notification {
         [int]$TimeoutInSeconds = -1
     )
 
-    # Ensure the notification assembly is initialized
+    # Ensure the notification manager is initialized
     if (-not $script:NotificationManager) {
         if (-not (Initialize-WindowsNotifications)) {
             return $null
@@ -418,8 +208,7 @@ function Wait-Notification {
     }
 
     try {
-        $timeoutMs = $TimeoutInSeconds -eq -1 ? -1 : ($TimeoutInSeconds * 1000)
-        return $script:NotificationManager.WaitForNotification($NotificationId, $timeoutMs)
+        return $script:NotificationManager.WaitForNotification($NotificationId, $TimeoutInSeconds * 1000)
     }
     catch {
         Write-Error "Failed to wait for notification: $_"
@@ -427,11 +216,11 @@ function Wait-Notification {
     }
 }
 
-function Get-NotificationHistory {
+function Get-AllNotificationResults {
     [CmdletBinding()]
     param ()
 
-    # Ensure the notification assembly is initialized
+    # Ensure the notification manager is initialized
     if (-not $script:NotificationManager) {
         if (-not (Initialize-WindowsNotifications)) {
             return $null
@@ -442,19 +231,19 @@ function Get-NotificationHistory {
         return $script:NotificationManager.GetAllNotificationResults()
     }
     catch {
-        Write-Error "Failed to get notification history: $_"
+        Write-Error "Failed to get all notification results: $_"
         return $null
     }
 }
 
-function Remove-NotificationHistory {
+function Remove-NotificationResult {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory=$true)]
         [string]$NotificationId
     )
 
-    # Ensure the notification assembly is initialized
+    # Ensure the notification manager is initialized
     if (-not $script:NotificationManager) {
         if (-not (Initialize-WindowsNotifications)) {
             return $false
@@ -462,36 +251,31 @@ function Remove-NotificationHistory {
     }
 
     try {
-        if ($NotificationId) {
-            return $script:NotificationManager.DeleteNotificationResult($NotificationId)
-        }
-        else {
-            return $script:NotificationManager.DeleteAllNotificationResults()
-        }
+        return $script:NotificationManager.DeleteNotificationResult($NotificationId)
     }
     catch {
-        Write-Error "Failed to remove notification history: $_"
+        Write-Error "Failed to remove notification result: $_"
         return $false
     }
 }
 
-function Get-InteractiveUserSessions {
+function Clear-AllNotificationResults {
     [CmdletBinding()]
     param ()
 
-    # Ensure the notification assembly is initialized
+    # Ensure the notification manager is initialized
     if (-not $script:NotificationManager) {
         if (-not (Initialize-WindowsNotifications)) {
-            return $null
+            return $false
         }
     }
 
     try {
-        return $script:NotificationManager.GetInteractiveUserSessions()
+        return $script:NotificationManager.DeleteAllNotificationResults()
     }
     catch {
-        Write-Error "Failed to get interactive user sessions: $_"
-        return $null
+        Write-Error "Failed to clear all notification results: $_"
+        return $false
     }
 }
 
@@ -499,7 +283,7 @@ function Test-SystemContext {
     [CmdletBinding()]
     param ()
 
-    # Ensure the notification assembly is initialized
+    # Ensure the notification manager is initialized
     if (-not $script:NotificationManager) {
         if (-not (Initialize-WindowsNotifications)) {
             return $false
@@ -515,5 +299,25 @@ function Test-SystemContext {
     }
 }
 
+function Get-InteractiveUserSessions {
+    [CmdletBinding()]
+    param ()
+
+    # Ensure the notification manager is initialized
+    if (-not $script:NotificationManager) {
+        if (-not (Initialize-WindowsNotifications)) {
+            return $null
+        }
+    }
+
+    try {
+        return $script:NotificationManager.GetInteractiveUserSessions()
+    }
+    catch {
+        Write-Error "Failed to get interactive user sessions: $_"
+        return $null
+    }
+}
+
 # Export public functions
-Export-ModuleMember -Function Initialize-WindowsNotifications, Show-Notification, Get-NotificationResult, Wait-Notification, Get-NotificationHistory, Remove-NotificationHistory, Get-InteractiveUserSessions, Test-SystemContext
+Export-ModuleMember -Function Initialize-WindowsNotifications, Show-Notification, Get-NotificationResult, Wait-Notification, Get-AllNotificationResults, Remove-NotificationResult, Clear-AllNotificationResults, Test-SystemContext, Get-InteractiveUserSessions

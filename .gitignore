@@ -35,16 +35,8 @@ ScaffoldingReadMe.txt
 *.nupkg
 # NuGet Symbol Packages
 *.snupkg
-# The packages folder can be ignored because of Package Restore
-**/[Pp]ackages/*
-# except build/, which is used as an MSBuild target.
-!**/[Pp]ackages/build/
-
-# NuGet tools
-nuget.exe
-
-# DLLs in PowerShell directory (these should be built, not committed)
-PowerShell/*.dll
+# We're including packages and PowerShell DLLs in this repository
+# to make it easier for users to get started
 
 # Others
 ~$*

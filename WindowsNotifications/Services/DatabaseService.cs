@@ -1,64 +1,61 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
+using System.Linq;
 using WindowsNotifications.Models;
 using WindowsNotifications.Utils;
 
 namespace WindowsNotifications.Services
 {
     /// <summary>
-    /// Service for managing notification state persistence using LiteDB
+    /// Service for managing notification data in LiteDB.
     /// </summary>
     internal class DatabaseService
     {
-        private readonly string _dbPath;
-        private readonly LiteDBEmbedded _liteDb;
-        private const string DEFAULT_DB_FOLDER = "%PROGRAMDATA%\\WindowsNotifications";
-        private const string DEFAULT_DB_NAME = "notifications.db";
+        private readonly string _databasePath;
 
         /// <summary>
-        /// Creates a new DatabaseService with the specified database path
+        /// Initializes a new instance of the <see cref="DatabaseService"/> class.
         /// </summary>
-        /// <param name="dbPath">The path to the database file, or null to use the default</param>
-        public DatabaseService(string dbPath = null)
+        /// <param name="databasePath">The path to the database file.</param>
+        public DatabaseService(string databasePath)
         {
-            // Determine the database path
-            _dbPath = GetDatabasePath(dbPath);
-            
-            // Ensure the directory exists
-            string directory = Path.GetDirectoryName(_dbPath);
-            if (!Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
-
-            // Initialize LiteDB
-            _liteDb = new LiteDBEmbedded(_dbPath);
+            _databasePath = databasePath;
+            EnsureDatabaseDirectoryExists();
         }
 
         /// <summary>
-        /// Gets the database path, using the default if none is specified
+        /// Saves a notification result to the database.
         /// </summary>
-        /// <param name="dbPath">The specified database path, or null to use the default</param>
-        /// <returns>The resolved database path</returns>
-        private string GetDatabasePath(string dbPath)
-        {
-            if (!string.IsNullOrEmpty(dbPath))
-                return dbPath;
-
-            string folder = Environment.ExpandEnvironmentVariables(DEFAULT_DB_FOLDER);
-            return Path.Combine(folder, DEFAULT_DB_NAME);
-        }
-
-        /// <summary>
-        /// Saves a notification result to the database
-        /// </summary>
-        /// <param name="result">The notification result to save</param>
-        /// <returns>True if the save was successful, false otherwise</returns>
+        /// <param name="result">The notification result to save.</param>
+        /// <returns>True if the result was saved successfully, false otherwise.</returns>
         public bool SaveNotificationResult(NotificationResult result)
         {
             try
             {
-                return _liteDb.UpsertNotificationResult(result);
+                using (var db = LiteDBEmbedded.GetDatabase(_databasePath))
+                {
+                    var collection = db.GetCollection<NotificationResult>("notifications");
+                    
+                    // Create index on NotificationId
+                    collection.EnsureIndex(x => x.NotificationId);
+                    
+                    // Check if the notification already exists
+                    var existingResult = collection.FindOne(x => x.NotificationId == result.NotificationId);
+                    
+                    if (existingResult != null)
+                    {
+                        // Update existing notification
+                        collection.Update(result);
+                    }
+                    else
+                    {
+                        // Insert new notification
+                        collection.Insert(result);
+                    }
+                    
+                    return true;
+                }
             }
             catch (Exception)
             {
@@ -67,15 +64,19 @@ namespace WindowsNotifications.Services
         }
 
         /// <summary>
-        /// Gets a notification result from the database
+        /// Gets a notification result from the database.
         /// </summary>
-        /// <param name="notificationId">The ID of the notification</param>
-        /// <returns>The notification result, or null if not found</returns>
+        /// <param name="notificationId">The unique identifier of the notification.</param>
+        /// <returns>The notification result, or null if not found.</returns>
         public NotificationResult GetNotificationResult(string notificationId)
         {
             try
             {
-                return _liteDb.GetNotificationResult(notificationId);
+                using (var db = LiteDBEmbedded.GetDatabase(_databasePath))
+                {
+                    var collection = db.GetCollection<NotificationResult>("notifications");
+                    return collection.FindOne(x => x.NotificationId == notificationId);
+                }
             }
             catch (Exception)
             {
@@ -84,14 +85,18 @@ namespace WindowsNotifications.Services
         }
 
         /// <summary>
-        /// Gets all notification results from the database
+        /// Gets all notification results from the database.
         /// </summary>
-        /// <returns>A list of notification results</returns>
+        /// <returns>A list of notification results.</returns>
         public List<NotificationResult> GetAllNotificationResults()
         {
             try
             {
-                return _liteDb.GetAllNotificationResults();
+                using (var db = LiteDBEmbedded.GetDatabase(_databasePath))
+                {
+                    var collection = db.GetCollection<NotificationResult>("notifications");
+                    return collection.FindAll().ToList();
+                }
             }
             catch (Exception)
             {
@@ -100,15 +105,19 @@ namespace WindowsNotifications.Services
         }
 
         /// <summary>
-        /// Deletes a notification result from the database
+        /// Deletes a notification result from the database.
         /// </summary>
-        /// <param name="notificationId">The ID of the notification</param>
-        /// <returns>True if the deletion was successful, false otherwise</returns>
+        /// <param name="notificationId">The unique identifier of the notification.</param>
+        /// <returns>True if the notification was deleted, false otherwise.</returns>
         public bool DeleteNotificationResult(string notificationId)
         {
             try
             {
-                return _liteDb.DeleteNotificationResult(notificationId);
+                using (var db = LiteDBEmbedded.GetDatabase(_databasePath))
+                {
+                    var collection = db.GetCollection<NotificationResult>("notifications");
+                    return collection.Delete(x => x.NotificationId == notificationId) > 0;
+                }
             }
             catch (Exception)
             {
@@ -117,14 +126,19 @@ namespace WindowsNotifications.Services
         }
 
         /// <summary>
-        /// Deletes all notification results from the database
+        /// Deletes all notification results from the database.
         /// </summary>
-        /// <returns>True if the deletion was successful, false otherwise</returns>
+        /// <returns>True if all notifications were deleted, false otherwise.</returns>
         public bool DeleteAllNotificationResults()
         {
             try
             {
-                return _liteDb.DeleteAllNotificationResults();
+                using (var db = LiteDBEmbedded.GetDatabase(_databasePath))
+                {
+                    var collection = db.GetCollection<NotificationResult>("notifications");
+                    collection.DeleteAll();
+                    return true;
+                }
             }
             catch (Exception)
             {
@@ -132,13 +146,13 @@ namespace WindowsNotifications.Services
             }
         }
 
-        /// <summary>
-        /// Gets the path to the database file
-        /// </summary>
-        /// <returns>The database file path</returns>
-        public string GetDatabaseFilePath()
+        private void EnsureDatabaseDirectoryExists()
         {
-            return _dbPath;
+            string directory = Path.GetDirectoryName(_databasePath);
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
         }
     }
 }

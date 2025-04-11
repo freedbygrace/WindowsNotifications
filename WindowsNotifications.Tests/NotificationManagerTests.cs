@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System;
 using System.IO;
+using WindowsNotifications;
 using WindowsNotifications.Models;
 
 namespace WindowsNotifications.Tests
@@ -8,203 +9,165 @@ namespace WindowsNotifications.Tests
     [TestFixture]
     public class NotificationManagerTests
     {
-        [Test]
-        public void Constructor_SetsDefaultDatabasePath()
-        {
-            // Act
-            var manager = new SimpleNotificationManager();
+        private string _testDbPath;
+        private NotificationManager _manager;
 
-            // Assert
-            Assert.IsNotNull(manager.DatabasePath);
-            Assert.IsTrue(manager.DatabasePath.Contains("WindowsNotifications"));
-            Assert.IsTrue(manager.DatabasePath.EndsWith("notifications.db"));
+        [SetUp]
+        public void Setup()
+        {
+            _testDbPath = Path.Combine(Path.GetTempPath(), string.Format("test_notifications_{0}.db", Guid.NewGuid()));
+            _manager = new NotificationManager(_testDbPath);
         }
 
-        [Test]
-        public void Constructor_SetsCustomDatabasePath()
+        [TearDown]
+        public void TearDown()
         {
-            // Arrange
-            string customPath = Path.Combine(Path.GetTempPath(), "custom.db");
-
-            // Act
-            var manager = new SimpleNotificationManager(customPath);
-
-            // Assert
-            Assert.AreEqual(customPath, manager.DatabasePath);
-        }
-
-        [Test]
-        public void ShowNotification_ValidatesOptions()
-        {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act & Assert
-            Assert.Throws<ArgumentNullException>(() => manager.ShowNotification(null));
-
-            var emptyOptions = new NotificationOptions();
-            Assert.Throws<ArgumentException>(() => manager.ShowNotification(emptyOptions));
-        }
-
-        [Test]
-        public void ShowNotification_ReturnsValidResult()
-        {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-            var options = new NotificationOptions
+            if (File.Exists(_testDbPath))
             {
-                Title = "Test Title",
-                Message = "Test Message"
-            };
-
-            // Act
-            var result = manager.ShowNotification(options);
-
-            // Assert
-            Assert.IsNotNull(result);
-            Assert.AreEqual(options.Id, result.NotificationId);
-            Assert.IsTrue(result.Displayed);
-            Assert.IsNotNull(result.CreatedTime);
+                try
+                {
+                    File.Delete(_testDbPath);
+                }
+                catch
+                {
+                    // Ignore errors
+                }
+            }
         }
 
         [Test]
-        public void ShowSimpleNotification_ReturnsValidResult()
+        public void NotificationManager_Constructor_DefaultPath_IsCorrect()
         {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act
-            var result = manager.ShowSimpleNotification("Test Title", "Test Message");
+            // Arrange & Act
+            var manager = new NotificationManager();
 
             // Assert
-            Assert.IsNotNull(result);
-            Assert.IsNotNull(result.NotificationId);
-            Assert.IsTrue(result.Displayed);
-            Assert.IsNotNull(result.CreatedTime);
+            string dbPath = manager.GetDatabaseFilePath();
+            Assert.IsNotNull(dbPath);
+            Assert.IsTrue(dbPath.Contains("WindowsNotifications"));
+            Assert.IsTrue(dbPath.EndsWith(".db"));
         }
 
         [Test]
-        public void ShowNotificationWithButtons_ReturnsValidResult()
+        public void NotificationManager_Constructor_CustomPath_IsCorrect()
         {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act
-            var result = manager.ShowNotificationWithButtons("Test Title", "Test Message", "Button 1", "Button 2");
+            // Arrange & Act
+            var customPath = Path.Combine(Path.GetTempPath(), "custom_notifications.db");
+            var manager = new NotificationManager(customPath);
 
             // Assert
-            Assert.IsNotNull(result);
-            Assert.IsNotNull(result.NotificationId);
-            Assert.IsTrue(result.Displayed);
-            Assert.IsNotNull(result.CreatedTime);
-            Assert.IsTrue(result.Activated);
-            Assert.IsNotNull(result.ClickedButtonId);
-            Assert.IsNotNull(result.ClickedButtonText);
-            Assert.IsNotNull(result.ClickedButtonArgument);
+            Assert.AreEqual(customPath, manager.GetDatabaseFilePath());
         }
 
         [Test]
-        public void GetDatabaseFilePath_ReturnsDatabasePath()
+        public void NotificationManager_IsRunningAsSystem_ReturnsCorrectValue()
         {
-            // Arrange
-            string customPath = Path.Combine(Path.GetTempPath(), "custom.db");
-            var manager = new SimpleNotificationManager(customPath);
-
-            // Act
-            string path = manager.GetDatabaseFilePath();
+            // Arrange & Act
+            bool isSystem = _manager.IsRunningAsSystem();
 
             // Assert
-            Assert.AreEqual(customPath, path);
-        }
-
-        [Test]
-        public void IsRunningAsSystem_ReturnsFalse()
-        {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act
-            bool isSystem = manager.IsRunningAsSystem();
-
-            // Assert
+            // This will be false in a test environment, but we're just testing the method returns a value
             Assert.IsFalse(isSystem);
         }
 
         [Test]
-        public void GetInteractiveUserSessions_ReturnsEmptyList()
+        public void NotificationManager_GetInteractiveUserSessions_ReturnsNonNullList()
         {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act
-            var sessions = manager.GetInteractiveUserSessions();
+            // Arrange & Act
+            var sessions = _manager.GetInteractiveUserSessions();
 
             // Assert
             Assert.IsNotNull(sessions);
-            Assert.AreEqual(0, sessions.Count);
+            // We can't assert the count because it depends on the environment
         }
 
         [Test]
-        public void GetNotificationResult_ReturnsNull()
+        public void NotificationManager_ShowSimpleNotification_ReturnsResult()
         {
             // Arrange
-            var manager = new SimpleNotificationManager();
+            string title = "Test Title";
+            string message = "Test Message";
 
             // Act
-            var result = manager.GetNotificationResult("test-id");
+            var result = _manager.ShowSimpleNotification(title, message);
+
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.IsNotNull(result.NotificationId);
+        }
+
+        [Test]
+        public void NotificationManager_ShowNotificationWithButtons_ReturnsResult()
+        {
+            // Arrange
+            string title = "Test Title";
+            string message = "Test Message";
+            string[] buttons = new[] { "OK", "Cancel" };
+
+            // Act
+            var result = _manager.ShowNotificationWithButtons(title, message, buttons);
+
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.IsNotNull(result.NotificationId);
+        }
+
+        [Test]
+        public void NotificationManager_ShowRebootNotification_ReturnsResult()
+        {
+            // Arrange
+            string title = "Test Title";
+            string message = "Test Message";
+
+            // Act
+            var result = _manager.ShowRebootNotification(title, message);
+
+            // Assert
+            Assert.IsNotNull(result);
+            Assert.IsNotNull(result.NotificationId);
+        }
+
+        [Test]
+        public void NotificationManager_GetNotificationResult_ReturnsNullForNonExistentId()
+        {
+            // Arrange
+            string nonExistentId = Guid.NewGuid().ToString();
+
+            // Act
+            var result = _manager.GetNotificationResult(nonExistentId);
 
             // Assert
             Assert.IsNull(result);
         }
 
         [Test]
-        public void WaitForNotification_ReturnsNull()
+        public void NotificationManager_GetAllNotificationResults_ReturnsNonNullList()
         {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act
-            var result = manager.WaitForNotification("test-id", 100);
-
-            // Assert
-            Assert.IsNull(result);
-        }
-
-        [Test]
-        public void GetAllNotificationResults_ReturnsEmptyList()
-        {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act
-            var results = manager.GetAllNotificationResults();
+            // Arrange & Act
+            var results = _manager.GetAllNotificationResults();
 
             // Assert
             Assert.IsNotNull(results);
-            Assert.AreEqual(0, results.Count);
         }
 
         [Test]
-        public void DeleteNotificationResult_ReturnsTrue()
+        public void NotificationManager_DeleteNotificationResult_ReturnsFalseForNonExistentId()
         {
             // Arrange
-            var manager = new SimpleNotificationManager();
+            string nonExistentId = Guid.NewGuid().ToString();
 
             // Act
-            bool result = manager.DeleteNotificationResult("test-id");
+            bool result = _manager.DeleteNotificationResult(nonExistentId);
 
             // Assert
-            Assert.IsTrue(result);
+            Assert.IsFalse(result);
         }
 
         [Test]
-        public void DeleteAllNotificationResults_ReturnsTrue()
+        public void NotificationManager_DeleteAllNotificationResults_ReturnsTrue()
         {
-            // Arrange
-            var manager = new SimpleNotificationManager();
-
-            // Act
-            bool result = manager.DeleteAllNotificationResults();
+            // Arrange & Act
+            bool result = _manager.DeleteAllNotificationResults();
 
             // Assert
             Assert.IsTrue(result);

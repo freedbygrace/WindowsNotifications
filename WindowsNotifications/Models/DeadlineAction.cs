@@ -1,79 +1,51 @@
 using System;
-using System.Diagnostics;
 
 namespace WindowsNotifications.Models
 {
     /// <summary>
-    /// Represents an action to take when a notification deadline is reached
+    /// Represents an action to take when a notification deadline is reached.
     /// </summary>
     public class DeadlineAction
     {
         /// <summary>
-        /// The type of action to take
+        /// Gets or sets the type of deadline action.
         /// </summary>
-        public DeadlineActionType ActionType { get; set; } = DeadlineActionType.None;
+        public DeadlineActionType ActionType { get; set; }
 
         /// <summary>
-        /// The command to execute (for Process action type)
+        /// Gets or sets the command to execute when the deadline is reached.
         /// </summary>
         public string Command { get; set; }
 
         /// <summary>
-        /// The arguments for the command (for Process action type)
-        /// </summary>
-        public string Arguments { get; set; }
-
-        /// <summary>
-        /// The URL to open (for Url action type)
-        /// </summary>
-        public string Url { get; set; }
-
-        /// <summary>
-        /// The script to execute (for Script action type)
+        /// Gets or sets the script to execute when the deadline is reached.
         /// </summary>
         public string Script { get; set; }
 
         /// <summary>
-        /// The custom action to execute (for Custom action type)
+        /// Gets or sets the action to execute when the deadline is reached.
         /// </summary>
-        public Action<NotificationResult> CustomAction { get; set; }
+        public Action Action { get; set; }
 
         /// <summary>
-        /// Creates a new DeadlineAction with no action
+        /// Creates a new deadline action that executes a command.
         /// </summary>
-        public DeadlineAction()
-        {
-        }
-
-        /// <summary>
-        /// Creates a new DeadlineAction that runs a process
-        /// </summary>
-        /// <param name="command">The command to execute</param>
-        /// <param name="arguments">The arguments for the command</param>
-        public DeadlineAction(string command, string arguments = null)
-        {
-            ActionType = DeadlineActionType.Process;
-            Command = command;
-            Arguments = arguments;
-        }
-
-        /// <summary>
-        /// Creates a new DeadlineAction that opens a URL
-        /// </summary>
-        /// <param name="url">The URL to open</param>
-        public static DeadlineAction OpenUrl(string url)
+        /// <param name="command">The command to execute.</param>
+        /// <returns>A new deadline action.</returns>
+        public static DeadlineAction ExecuteCommand(string command)
         {
             return new DeadlineAction
             {
-                ActionType = DeadlineActionType.Url,
-                Url = url
+                ActionType = DeadlineActionType.Command,
+                Command = command
             };
         }
 
         /// <summary>
-        /// Creates a new DeadlineAction that executes a PowerShell script
+        /// Creates a new deadline action that executes a PowerShell script.
         /// </summary>
-        /// <param name="script">The PowerShell script to execute</param>
+        /// <param name="script">The PowerShell script to execute.</param>
+        /// <returns>A new deadline action.</returns>
         public static DeadlineAction ExecuteScript(string script)
         {
             return new DeadlineAction
@@ -84,89 +56,43 @@ namespace WindowsNotifications.Models
         }
 
         /// <summary>
-        /// Creates a new DeadlineAction that executes a custom action
+        /// Creates a new deadline action that executes a .NET action.
         /// </summary>
-        /// <param name="action">The custom action to execute</param>
-        public static DeadlineAction ExecuteCustomAction(Action<NotificationResult> action)
+        /// <param name="action">The action to execute.</param>
+        /// <returns>A new deadline action.</returns>
+        public static DeadlineAction ExecuteAction(Action action)
         {
             return new DeadlineAction
             {
-                ActionType = DeadlineActionType.Custom,
-                CustomAction = action
+                ActionType = DeadlineActionType.Action,
+                Action = action
             };
-        }
-
-        /// <summary>
-        /// Executes the deadline action
-        /// </summary>
-        /// <param name="result">The notification result</param>
-        public void Execute(NotificationResult result)
-        {
-            try
-            {
-                switch (ActionType)
-                {
-                    case DeadlineActionType.Process:
-                        if (!string.IsNullOrEmpty(Command))
-                        {
-                            Process.Start(Command, Arguments ?? string.Empty);
-                        }
-                        break;
-
-                    case DeadlineActionType.Url:
-                        if (!string.IsNullOrEmpty(Url))
-                        {
-                            Process.Start(Url);
-                        }
-                        break;
-
-                    case DeadlineActionType.Script:
-                        if (!string.IsNullOrEmpty(Script))
-                        {
-                            Process.Start("powershell.exe", $"-ExecutionPolicy Bypass -Command \"{Script}\"");
-                        }
-                        break;
-
-                    case DeadlineActionType.Custom:
-                        CustomAction?.Invoke(result);
-                        break;
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error executing deadline action: {ex.Message}");
-            }
         }
     }
 
     /// <summary>
-    /// The type of action to take when a deadline is reached
+    /// Defines the types of deadline actions.
     /// </summary>
     public enum DeadlineActionType
     {
         /// <summary>
-        /// No action
+        /// No action.
         /// </summary>
         None,
 
         /// <summary>
-        /// Run a process
+        /// Execute a command.
         /// </summary>
-        Process,
+        Command,
 
         /// <summary>
-        /// Open a URL
-        /// </summary>
-        Url,
-
-        /// <summary>
-        /// Execute a PowerShell script
+        /// Execute a PowerShell script.
         /// </summary>
         Script,
 
         /// <summary>
-        /// Execute a custom action
+        /// Execute a .NET action.
         /// </summary>
-        Custom
+        Action
     }
 }

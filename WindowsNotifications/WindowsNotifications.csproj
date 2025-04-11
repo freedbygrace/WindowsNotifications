@@ -33,38 +33,48 @@
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Runtime.WindowsRuntime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Windows\Microsoft.NET\Framework\v4.0.30319\System.Runtime.WindowsRuntime.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Windows">
-      <HintPath>C:\Windows\Microsoft.NET\Framework\v4.0.30319\Windows.winmd</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="System.Data" />
-    <Reference Include="System.Xml" />
-    <Reference Include="System.Management" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Management.Automation" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\LiteDB.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Cmdlets\ClearAllNotificationResultsCmdlet.cs" />
+    <Compile Include="Cmdlets\GetAllNotificationResultsCmdlet.cs" />
+    <Compile Include="Cmdlets\GetInteractiveUserSessionsCmdlet.cs" />
+    <Compile Include="Cmdlets\GetNotificationResultCmdlet.cs" />
+    <Compile Include="Cmdlets\InitializeWindowsNotificationsCmdlet.cs" />
+    <Compile Include="Cmdlets\RemoveNotificationResultCmdlet.cs" />
+    <Compile Include="Cmdlets\ShowNotificationCmdlet.cs" />
+    <Compile Include="Cmdlets\TestSystemContextCmdlet.cs" />
+    <Compile Include="Cmdlets\WaitNotificationCmdlet.cs" />
+    <Compile Include="NotificationManager.cs" />
+    <Compile Include="Models\DeadlineAction.cs" />
     <Compile Include="Models\DeferralOptions.cs" />
+    <Compile Include="Models\NotificationButton.cs" />
     <Compile Include="Models\NotificationOptions.cs" />
     <Compile Include="Models\NotificationResult.cs" />
-    <Compile Include="NotificationManager.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\DatabaseService.cs" />
     <Compile Include="Services\ToastNotificationService.cs" />
     <Compile Include="Services\UserImpersonation.cs" />
     <Compile Include="Services\UserSessionManager.cs" />
     <Compile Include="Utils\AssemblyLoader.cs" />
     <Compile Include="Utils\LiteDBEmbedded.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\LiteDB.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

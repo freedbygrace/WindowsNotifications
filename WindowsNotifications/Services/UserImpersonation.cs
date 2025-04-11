@@ -1,280 +1,275 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
-using System.ComponentModel;
-using System.Security.Permissions;
 
 namespace WindowsNotifications.Services
 {
     /// <summary>
-    /// Provides functionality for impersonating a user from SYSTEM context
+    /// Utility for impersonating users.
     /// </summary>
-    internal class UserImpersonation : IDisposable
+    internal static class UserImpersonation
     {
+        /// <summary>
+        /// Runs an action as the specified user.
+        /// </summary>
+        /// <typeparam name="T">The return type of the action.</typeparam>
+        /// <param name="userName">The name of the user to impersonate.</param>
+        /// <param name="action">The action to run.</param>
+        /// <returns>The result of the action.</returns>
+        public static T RunAsUser<T>(string userName, Func<T> action)
+        {
+            if (string.IsNullOrEmpty(userName))
+            {
+                return action();
+            }
+
+            IntPtr userToken = IntPtr.Zero;
+            IntPtr duplicateToken = IntPtr.Zero;
+            WindowsImpersonationContext impersonationContext = null;
+
+            try
+            {
+                // Get the token for the user
+                if (!GetSessionUserToken(ref userToken, userName))
+                {
+                    return action();
+                }
+
+                // Duplicate the token
+                if (!DuplicateToken(userToken, 2, ref duplicateToken))
+                {
+                    return action();
+                }
+
+                // Create a WindowsIdentity from the token
+                using (WindowsIdentity identity = new WindowsIdentity(duplicateToken))
+                {
+                    // Impersonate the user
+                    impersonationContext = identity.Impersonate();
+
+                    // Run the action
+                    return action();
+                }
+            }
+            finally
+            {
+                // Clean up
+                if (impersonationContext != null)
+                {
+                    impersonationContext.Undo();
+                }
+
+                if (userToken != IntPtr.Zero)
+                {
+                    CloseHandle(userToken);
+                }
+
+                if (duplicateToken != IntPtr.Zero)
+                {
+                    CloseHandle(duplicateToken);
+                }
+            }
+        }
+
+        private static bool GetSessionUserToken(ref IntPtr token, string userName)
+        {
+            IntPtr wtsToken = IntPtr.Zero;
+            int sessionId = -1;
+
+            try
+            {
+                // Find the session ID for the user
+                IntPtr serverHandle = IntPtr.Zero;
+                IntPtr sessionInfo = IntPtr.Zero;
+                int sessionCount = 0;
+                int retVal = WTSEnumerateSessions(serverHandle, 0, 1, ref sessionInfo, ref sessionCount);
+
+                if (retVal != 0)
+                {
+                    int dataSize = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+                    IntPtr currentSession = sessionInfo;
+
+                    for (int i = 0; i < sessionCount; i++)
+                    {
+                        WTS_SESSION_INFO si = (WTS_SESSION_INFO)Marshal.PtrToStructure(currentSession, typeof(WTS_SESSION_INFO));
+                        currentSession = IntPtr.Add(currentSession, dataSize);
+
+                        if (si.State == WTS_CONNECTSTATE_CLASS.WTSActive)
+                        {
+                            IntPtr buffer = IntPtr.Zero;
+                            int bytesReturned = 0;
+
+                            if (WTSQuerySessionInformation(IntPtr.Zero, si.SessionID, WTS_INFO_CLASS.WTSUserName, out buffer, out bytesReturned) && bytesReturned > 1)
+                            {
+                                string sessionUserName = Marshal.PtrToStringAnsi(buffer);
+                                WTSFreeMemory(buffer);
+
+                                if (string.Equals(sessionUserName, userName, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    sessionId = si.SessionID;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    WTSFreeMemory(sessionInfo);
+                }
+
+                if (sessionId == -1)
+                {
+                    return false;
+                }
+
+                // Get the user token for the session
+                if (!WTSQueryUserToken(sessionId, ref wtsToken))
+                {
+                    return false;
+                }
+
+                // Duplicate the token
+                if (!DuplicateTokenEx(wtsToken, TOKEN_ASSIGN_PRIMARY | TOKEN_ALL_ACCESS, IntPtr.Zero, SECURITY_IMPERSONATION_LEVEL.SecurityImpersonation, TOKEN_TYPE.TokenPrimary, ref token))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            finally
+            {
+                if (wtsToken != IntPtr.Zero)
+                {
+                    CloseHandle(wtsToken);
+                }
+            }
+        }
+
         #region Win32 API
 
+        private const int TOKEN_ASSIGN_PRIMARY = 0x0001;
+        private const int TOKEN_DUPLICATE = 0x0002;
+        private const int TOKEN_IMPERSONATE = 0x0004;
+        private const int TOKEN_QUERY = 0x0008;
+        private const int TOKEN_QUERY_SOURCE = 0x0010;
+        private const int TOKEN_ADJUST_PRIVILEGES = 0x0020;
+        private const int TOKEN_ADJUST_GROUPS = 0x0040;
+        private const int TOKEN_ADJUST_DEFAULT = 0x0080;
+        private const int TOKEN_ADJUST_SESSIONID = 0x0100;
+        private const int TOKEN_ALL_ACCESS = TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE | TOKEN_IMPERSONATE | TOKEN_QUERY | TOKEN_QUERY_SOURCE | TOKEN_ADJUST_PRIVILEGES | TOKEN_ADJUST_GROUPS | TOKEN_ADJUST_DEFAULT | TOKEN_ADJUST_SESSIONID;
+
+        private enum WTS_INFO_CLASS
+        {
+            WTSInitialProgram,
+            WTSApplicationName,
+            WTSWorkingDirectory,
+            WTSOEMId,
+            WTSSessionId,
+            WTSUserName,
+            WTSWinStationName,
+            WTSDomainName,
+            WTSConnectState,
+            WTSClientBuildNumber,
+            WTSClientName,
+            WTSClientDirectory,
+            WTSClientProductId,
+            WTSClientHardwareId,
+            WTSClientAddress,
+            WTSClientDisplay,
+            WTSClientProtocolType,
+            WTSIdleTime,
+            WTSLogonTime,
+            WTSIncomingBytes,
+            WTSOutgoingBytes,
+            WTSIncomingFrames,
+            WTSOutgoingFrames,
+            WTSClientInfo,
+            WTSSessionInfo,
+            WTSSessionInfoEx,
+            WTSConfigInfo,
+            WTSValidationInfo,
+            WTSSessionAddressV4,
+            WTSIsRemoteSession
+        }
+
+        private enum WTS_CONNECTSTATE_CLASS
+        {
+            WTSActive,
+            WTSConnected,
+            WTSConnectQuery,
+            WTSShadow,
+            WTSDisconnected,
+            WTSIdle,
+            WTSListen,
+            WTSReset,
+            WTSDown,
+            WTSInit
+        }
+
+        private enum SECURITY_IMPERSONATION_LEVEL
+        {
+            SecurityAnonymous,
+            SecurityIdentification,
+            SecurityImpersonation,
+            SecurityDelegation
+        }
+
+        private enum TOKEN_TYPE
+        {
+            TokenPrimary = 1,
+            TokenImpersonation
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct WTS_SESSION_INFO
+        {
+            public int SessionID;
+            [MarshalAs(UnmanagedType.LPStr)]
+            public string pWinStationName;
+            public WTS_CONNECTSTATE_CLASS State;
+        }
+
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        private static extern int WTSEnumerateSessions(
+            IntPtr hServer,
+            int Reserved,
+            int Version,
+            ref IntPtr ppSessionInfo,
+            ref int pCount);
+
+        [DllImport("wtsapi32.dll")]
+        private static extern void WTSFreeMemory(IntPtr pMemory);
+
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        private static extern bool WTSQuerySessionInformation(
+            IntPtr hServer,
+            int sessionId,
+            WTS_INFO_CLASS wtsInfoClass,
+            out IntPtr ppBuffer,
+            out int pBytesReturned);
+
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        private static extern bool WTSQueryUserToken(
+            int sessionId,
+            ref IntPtr phToken);
+
         [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool LogonUser(
-            string lpszUsername,
-            string lpszDomain,
-            string lpszPassword,
-            int dwLogonType,
-            int dwLogonProvider,
-            out IntPtr phToken);
+        private static extern bool DuplicateTokenEx(
+            IntPtr hExistingToken,
+            int dwDesiredAccess,
+            IntPtr lpTokenAttributes,
+            SECURITY_IMPERSONATION_LEVEL impersonationLevel,
+            TOKEN_TYPE tokenType,
+            ref IntPtr phNewToken);
 
         [DllImport("advapi32.dll", SetLastError = true)]
         private static extern bool DuplicateToken(
             IntPtr ExistingTokenHandle,
-            int ImpersonationLevel,
-            out IntPtr DuplicateTokenHandle);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool ImpersonateLoggedOnUser(IntPtr hToken);
-
-        [DllImport("advapi32.dll", SetLastError = true)]
-        private static extern bool RevertToSelf();
+            int SECURITY_IMPERSONATION_LEVEL,
+            ref IntPtr DuplicateTokenHandle);
 
         [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
-        [DllImport("wtsapi32.dll", SetLastError = true)]
-        private static extern bool WTSQueryUserToken(uint sessionId, out IntPtr phToken);
-
-        [DllImport("userenv.dll", SetLastError = true)]
-        private static extern bool CreateEnvironmentBlock(out IntPtr lpEnvironment, IntPtr hToken, bool bInherit);
-
-        [DllImport("userenv.dll", SetLastError = true)]
-        private static extern bool DestroyEnvironmentBlock(IntPtr lpEnvironment);
-
-        private const int LOGON32_LOGON_INTERACTIVE = 2;
-        private const int LOGON32_PROVIDER_DEFAULT = 0;
-        private const int LOGON32_PROVIDER_WINNT50 = 3;
-        private const int SECURITY_IMPERSONATION = 2;
+        private static extern bool CloseHandle(IntPtr hHandle);
 
         #endregion
-
-        private IntPtr _userToken = IntPtr.Zero;
-        private IntPtr _impersonationToken = IntPtr.Zero;
-        private IntPtr _environmentBlock = IntPtr.Zero;
-        private bool _disposed = false;
-        private bool _isImpersonating = false;
-
-        /// <summary>
-        /// Gets whether the current process is running as SYSTEM
-        /// </summary>
-        public static bool IsRunningAsSystem
-        {
-            get
-            {
-                using (WindowsIdentity identity = WindowsIdentity.GetCurrent())
-                {
-                    return identity.User.IsWellKnown(WellKnownSidType.LocalSystemSid);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Impersonates a user by session ID
-        /// </summary>
-        /// <param name="sessionId">The session ID to impersonate</param>
-        /// <returns>True if impersonation was successful, false otherwise</returns>
-        public bool ImpersonateBySessionId(int sessionId)
-        {
-            if (_isImpersonating)
-                return false;
-
-            try
-            {
-                if (!WTSQueryUserToken((uint)sessionId, out _userToken))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to get user token for session");
-                }
-
-                if (!DuplicateToken(_userToken, SECURITY_IMPERSONATION, out _impersonationToken))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to duplicate token");
-                }
-
-                if (!CreateEnvironmentBlock(out _environmentBlock, _impersonationToken, false))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create environment block");
-                }
-
-                if (!ImpersonateLoggedOnUser(_impersonationToken))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to impersonate user");
-                }
-
-                _isImpersonating = true;
-                return true;
-            }
-            catch (Exception ex)
-            {
-                CleanupTokens();
-                throw new Exception("Impersonation failed", ex);
-            }
-        }
-
-        /// <summary>
-        /// Impersonates a user by username and password
-        /// </summary>
-        /// <param name="username">The username to impersonate</param>
-        /// <param name="domain">The domain of the user</param>
-        /// <param name="password">The password of the user</param>
-        /// <returns>True if impersonation was successful, false otherwise</returns>
-        public bool ImpersonateUser(string username, string domain, string password)
-        {
-            if (_isImpersonating)
-                return false;
-
-            try
-            {
-                if (!LogonUser(username, domain, password, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, out _userToken))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to log on as user");
-                }
-
-                if (!DuplicateToken(_userToken, SECURITY_IMPERSONATION, out _impersonationToken))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to duplicate token");
-                }
-
-                if (!CreateEnvironmentBlock(out _environmentBlock, _impersonationToken, false))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create environment block");
-                }
-
-                if (!ImpersonateLoggedOnUser(_impersonationToken))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to impersonate user");
-                }
-
-                _isImpersonating = true;
-                return true;
-            }
-            catch (Exception ex)
-            {
-                CleanupTokens();
-                throw new Exception("Impersonation failed", ex);
-            }
-        }
-
-        /// <summary>
-        /// Stops impersonating the user and reverts to the original security context
-        /// </summary>
-        public void StopImpersonation()
-        {
-            if (_isImpersonating)
-            {
-                RevertToSelf();
-                _isImpersonating = false;
-            }
-
-            CleanupTokens();
-        }
-
-        /// <summary>
-        /// Executes an action while impersonating a user
-        /// </summary>
-        /// <param name="sessionId">The session ID to impersonate</param>
-        /// <param name="action">The action to execute</param>
-        /// <returns>True if the action was executed successfully, false otherwise</returns>
-        public bool ExecuteAsUser(int sessionId, Action action)
-        {
-            if (!ImpersonateBySessionId(sessionId))
-                return false;
-
-            try
-            {
-                action();
-                return true;
-            }
-            finally
-            {
-                StopImpersonation();
-            }
-        }
-
-        /// <summary>
-        /// Executes a function while impersonating a user and returns the result
-        /// </summary>
-        /// <typeparam name="T">The return type of the function</typeparam>
-        /// <param name="sessionId">The session ID to impersonate</param>
-        /// <param name="func">The function to execute</param>
-        /// <returns>The result of the function</returns>
-        public T ExecuteAsUser<T>(int sessionId, Func<T> func)
-        {
-            if (!ImpersonateBySessionId(sessionId))
-                throw new Exception("Failed to impersonate user");
-
-            try
-            {
-                return func();
-            }
-            finally
-            {
-                StopImpersonation();
-            }
-        }
-
-        /// <summary>
-        /// Cleans up any open tokens
-        /// </summary>
-        private void CleanupTokens()
-        {
-            if (_environmentBlock != IntPtr.Zero)
-            {
-                DestroyEnvironmentBlock(_environmentBlock);
-                _environmentBlock = IntPtr.Zero;
-            }
-
-            if (_impersonationToken != IntPtr.Zero)
-            {
-                CloseHandle(_impersonationToken);
-                _impersonationToken = IntPtr.Zero;
-            }
-
-            if (_userToken != IntPtr.Zero)
-            {
-                CloseHandle(_userToken);
-                _userToken = IntPtr.Zero;
-            }
-        }
-
-        /// <summary>
-        /// Disposes of resources
-        /// </summary>
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        /// <summary>
-        /// Disposes of resources
-        /// </summary>
-        /// <param name="disposing">Whether this is being called from Dispose() or the finalizer</param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposed)
-            {
-                if (disposing)
-                {
-                    // Dispose managed resources
-                }
-
-                // Dispose unmanaged resources
-                StopImpersonation();
-                _disposed = true;
-            }
-        }
-
-        /// <summary>
-        /// Finalizer
-        /// </summary>
-        ~UserImpersonation()
-        {
-            Dispose(false);
-        }
     }
 }

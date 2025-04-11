@@ -1,105 +1,62 @@
 # Example: Custom Branded Notification
-# This script demonstrates how to create a notification with custom branding
+# This script demonstrates how to show a notification with custom branding
 
-# Load the WindowsNotifications assembly
+# Import the module
+$modulePath = Join-Path -Path $PSScriptRoot -ChildPath "..\PowerShell\WindowsNotifications.psd1"
+Import-Module $modulePath -Force
+
+# Initialize the notification system
 $dllPath = Join-Path -Path $PSScriptRoot -ChildPath "..\WindowsNotifications\bin\Release\WindowsNotifications.dll"
-if (Test-Path $dllPath) {
-    $bytes = [System.IO.File]::ReadAllBytes($dllPath)
-    $assembly = [System.Reflection.Assembly]::Load($bytes)
-}
-else {
-    Write-Error "WindowsNotifications.dll not found at $dllPath. Please build the solution first."
-    exit
-}
+Initialize-WindowsNotifications -DllPath $dllPath
 
-# Create a notification manager
-$notificationManager = New-Object WindowsNotifications.NotificationManager
-
-# Create custom notification options with branding
+# Create custom notification options
 $options = New-Object WindowsNotifications.Models.NotificationOptions
-
-# Set basic notification properties
 $options.Title = "IT Department Notification"
-$options.Message = "Your system has been selected for a security update. Please review the details below."
+$options.Message = "Your system has been selected for a security update."
 
 # Set branding properties
-$options.BrandingText = "Contoso IT Department"
-$options.BrandingColor = "#0078D7"  # Blue
-$options.AccentColor = "#E81123"    # Red
-$options.UseDarkTheme = $true
+$options.Attribution = "Contoso IT Department"
 
-# Set custom images
-# Note: Replace these paths with actual image paths on your system
-$logoPath = Join-Path -Path $PSScriptRoot -ChildPath "Images\company-logo.png"
+# Set custom images (file paths or URLs)
+$logoPath = Join-Path -Path $PSScriptRoot -ChildPath "logo.png"
 if (Test-Path $logoPath) {
     $options.LogoImagePath = $logoPath
 }
-else {
-    # Use a URL as fallback
-    $options.LogoImagePath = "https://www.contoso.com/images/logo.png"
-}
 
-$heroPath = Join-Path -Path $PSScriptRoot -ChildPath "Images\banner.png"
+$heroPath = Join-Path -Path $PSScriptRoot -ChildPath "banner.png"
 if (Test-Path $heroPath) {
     $options.HeroImagePath = $heroPath
 }
 
-# Add custom buttons with images
+# Add custom buttons
 $updateButton = New-Object WindowsNotifications.Models.NotificationButton("Install Update", "install")
-$updateButton.BackgroundColor = "#107C10"  # Green
-$updateButton.TextColor = "#FFFFFF"        # White
-
-$deferButton = New-Object WindowsNotifications.Models.NotificationButton("Defer", "defer")
-$deferButton.BackgroundColor = "#5A5A5A"   # Gray
-$deferButton.TextColor = "#FFFFFF"         # White
-
-$moreInfoButton = New-Object WindowsNotifications.Models.NotificationButton("More Info", "info")
-$moreInfoButton.IsContextMenu = $true
-
-# Add buttons to the notification
+$laterButton = New-Object WindowsNotifications.Models.NotificationButton("Later", "later")
 $options.Buttons.Add($updateButton)
-$options.Buttons.Add($deferButton)
-$options.Buttons.Add($moreInfoButton)
-
-# Configure audio
-$options.AudioSource = "ms-winsoundevent:Notification.Default"
-$options.SilentMode = $false
+$options.Buttons.Add($laterButton)
 
 # Show the notification
-Write-Host "Showing custom branded notification..."
+$notificationManager = New-Object WindowsNotifications.NotificationManager
 $result = $notificationManager.ShowNotification($options)
 
 # Display the result
 Write-Host "Notification displayed: $($result.Displayed)"
 Write-Host "Notification ID: $($result.NotificationId)"
 
-# If the notification was displayed, wait for interaction
-if ($result.Displayed) {
-    Write-Host "Waiting for user interaction..."
-    $result = $notificationManager.WaitForNotification($result.NotificationId)
-    
-    if ($result -ne $null) {
-        Write-Host "Notification was activated: $($result.Activated)"
-        Write-Host "Notification was dismissed: $($result.Dismissed)"
+# If the notification was interacted with, show the details
+if ($result.Activated) {
+    Write-Host "Notification was activated"
+    if ($result.ClickedButtonId) {
+        Write-Host "Button clicked: $($result.ClickedButtonText) (ID: $($result.ClickedButtonId))"
         
-        if ($result.ClickedButtonId) {
-            Write-Host "Button clicked: $($result.ClickedButtonText) (ID: $($result.ClickedButtonId))"
-            
-            # Take action based on which button was clicked
-            switch ($result.ClickedButtonId) {
-                "install" {
-                    Write-Host "User chose to install the update"
-                    # In a real script, you would initiate the update here
-                }
-                "defer" {
-                    Write-Host "User chose to defer the update"
-                    # In a real script, you would schedule a reminder here
-                }
-                "info" {
-                    Write-Host "User requested more information"
-                    # In a real script, you would open a help page or display more details
-                }
-            }
+        # Handle button clicks
+        if ($result.ClickedButtonId -eq "install") {
+            Write-Host "User chose to install the update (simulated)"
+            # In a real script, you would install the update here
+        } elseif ($result.ClickedButtonId -eq "later") {
+            Write-Host "User chose to install later"
+            # In a real script, you would schedule a reminder here
         }
     }
+} elseif ($result.Dismissed) {
+    Write-Host "Notification was dismissed"
 }

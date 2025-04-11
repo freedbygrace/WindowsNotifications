@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("WindowsNotifications")]
-[assembly: AssemblyDescription("A library for displaying Windows notifications from SYSTEM context")]
+[assembly: AssemblyTitle("WindowsNotifications.Tests")]
+[assembly: AssemblyDescription("Tests for the Windows Notifications library")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("WindowsNotifications")]
+[assembly: AssemblyProduct("WindowsNotifications.Tests")]
 [assembly: AssemblyCopyright("Copyright © 2023")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("a1b2c3d4-e5f6-47a8-b9c0-d1e2f3a4b5c6")]
+[assembly: Guid("b1c2d3e4-f5g6-47a8-b9c0-d1e2f3a4b5c6")]
 
 // Version information for an assembly consists of the following four values:
 //

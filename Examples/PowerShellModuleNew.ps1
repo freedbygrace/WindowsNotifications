@@ -6,38 +6,37 @@ $modulePath = Join-Path -Path $PSScriptRoot -ChildPath "..\PowerShell\WindowsNot
 Import-Module $modulePath -Force
 
 # Initialize the notification system
-$dllPath = Join-Path -Path $PSScriptRoot -ChildPath "..\WindowsNotifications\bin\Release\WindowsNotifications.dll"
-Initialize-WindowsNotifications -DllPath $dllPath
+Initialize-WindowsNotifications
 
 # Check if running as SYSTEM
 $isSystem = Test-SystemContext
-Write-Host "Running as SYSTEM: $isSystem"
+Write-Output "Running as SYSTEM: $isSystem"
 
 # Get interactive user sessions
 $sessions = Get-InteractiveUserSessions
-Write-Host "Interactive user sessions: $($sessions.Count)"
+Write-Output "Interactive user sessions: $($sessions.Count)"
 foreach ($session in $sessions) {
-    Write-Host "  - $session"
+    Write-Output "  - $session"
 }
 
 # Show a simple notification
 $result = Show-Notification -Title "PowerShell Module" -Message "This notification was shown using the PowerShell module."
 
 # Display the result
-Write-Host "Notification displayed: $($result.Displayed)"
-Write-Host "Notification ID: $($result.NotificationId)"
+Write-Output "Notification displayed: $($result.Displayed)"
+Write-Output "Notification ID: $($result.NotificationId)"
 
 # If the notification was interacted with, show the details
 if ($result.Activated) {
-    Write-Host "Notification was activated"
+    Write-Output "Notification was activated"
 } elseif ($result.Dismissed) {
-    Write-Host "Notification was dismissed"
+    Write-Output "Notification was dismissed"
 }
 
 # Get all notification results
 $results = Get-AllNotificationResults
-Write-Host "Total notification results: $($results.Count)"
+Write-Output "Total notification results: $($results.Count)"
 
 # Clear all notification results
 Clear-AllNotificationResults
-Write-Host "All notification results cleared"
+Write-Output "All notification results cleared"
